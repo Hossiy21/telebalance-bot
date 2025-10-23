@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"regexp"
 
@@ -11,7 +12,6 @@ import (
 )
 
 func parseMessage(msg string) string {
-	// Extract original minutes, data, and SMS
 	origRe := regexp.MustCompile(`Monthly voice (\d+) Min,([\d.]+)GB and (\d+) from telebirr SMS`)
 	origMatch := origRe.FindStringSubmatch(msg)
 	if len(origMatch) < 4 {
@@ -22,7 +22,6 @@ func parseMessage(msg string) string {
 
 	origMinutes, origData, origSMS := origMatch[1], origMatch[2], origMatch[3]
 
-	// Extract remaining minutes
 	remRe := regexp.MustCompile(`is (\d+) minute(?:s)? and (\d+) second`)
 	remMatch := remRe.FindStringSubmatch(msg)
 	if len(remMatch) < 3 {
@@ -54,40 +53,51 @@ SMS: %s
 }
 
 func main() {
-    // Only load .env locally if TELEGRAM_BOT_TOKEN is not set
-    if _, exists := os.LookupEnv("TELEGRAM_BOT_TOKEN"); !exists {
-        err := godotenv.Load()
-        if err != nil {
-            log.Println("Warning: .env file not found, relying on environment variables")
-        }
-    }
+	if _, exists := os.LookupEnv("TELEGRAM_BOT_TOKEN"); !exists {
+		_ = godotenv.Load()
+	}
 
-    // Get token from environment
-    botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-    if botToken == "" {
-        log.Fatal("TELEGRAM_BOT_TOKEN not set")
-    }
+	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	if botToken == "" {
+		log.Fatal("TELEGRAM_BOT_TOKEN not set")
+	}
 
-    bot, err := tgbotapi.NewBotAPI(botToken)
-    if err != nil {
-        log.Panic(err)
-    }
+	bot, err := tgbotapi.NewBotAPI(botToken)
+	if err != nil {
+		log.Panic(err)
+	}
 
-    bot.Debug = true
+	bot.Debug = true
 
-    u := tgbotapi.NewUpdate(0)
-    u.Timeout = 60
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = 60
 
-    updates := bot.GetUpdatesChan(u)
+	updates := bot.GetUpdatesChan(u)
 
-    for update := range updates {
-        if update.Message != nil {
-            shortMsg := parseMessage(update.Message.Text)
-            msg := tgbotapi.NewMessage(update.Message.Chat.ID, shortMsg)
-            msg.ParseMode = "HTML"
-            msg.DisableWebPagePreview = true
-            bot.Send(msg)
-        }
-    }
+	// ✅ Start small HTTP server in background (for Render)
+	go func() {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintln(w, "Telegram bot is running ✅")
+		})
+
+		log.Printf("Listening on port %s\n", port)
+		if err := http.ListenAndServe(":"+port, nil); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	for update := range updates {
+		if update.Message != nil {
+			shortMsg := parseMessage(update.Message.Text)
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, shortMsg)
+			msg.ParseMode = "HTML"
+			msg.DisableWebPagePreview = true
+			bot.Send(msg)
+		}
+	}
 }
-
