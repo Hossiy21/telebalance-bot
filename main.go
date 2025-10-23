@@ -35,12 +35,12 @@ Please include something like "is 183 minute and 10 second" in your message.
 	remainingData := "0"
 	remainingSMS := origSMS
 
-	shortMsg := fmt.Sprintf(`📝 <b>Original Package</b>
+	shortMsg := fmt.Sprintf(`📝 <b>Your Original Package is :</b>
 Minutes: %s
 Data: %s GB
 SMS: %s
 
-💬 <b>Remaining Balance</b>
+💬 <b>Your Remaining Balance is : </b>
 Minutes: %s
 Data: %s MB
 SMS: %s
