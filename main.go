@@ -54,40 +54,40 @@ SMS: %s
 }
 
 func main() {
-	// Only load .env locally if TELEGRAM_BOT_TOKEN not already set
-if _, exists := os.LookupEnv("TELEGRAM_BOT_TOKEN"); !exists {
-    err := godotenv.Load()
+    // Only load .env locally if TELEGRAM_BOT_TOKEN is not set
+    if _, exists := os.LookupEnv("TELEGRAM_BOT_TOKEN"); !exists {
+        err := godotenv.Load()
+        if err != nil {
+            log.Println("Warning: .env file not found, relying on environment variables")
+        }
+    }
+
+    // Get token from environment
+    botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+    if botToken == "" {
+        log.Fatal("TELEGRAM_BOT_TOKEN not set")
+    }
+
+    bot, err := tgbotapi.NewBotAPI(botToken)
     if err != nil {
-        log.Println("Warning: .env file not found, relying on environment variables")
+        log.Panic(err)
+    }
+
+    bot.Debug = true
+
+    u := tgbotapi.NewUpdate(0)
+    u.Timeout = 60
+
+    updates := bot.GetUpdatesChan(u)
+
+    for update := range updates {
+        if update.Message != nil {
+            shortMsg := parseMessage(update.Message.Text)
+            msg := tgbotapi.NewMessage(update.Message.Chat.ID, shortMsg)
+            msg.ParseMode = "HTML"
+            msg.DisableWebPagePreview = true
+            bot.Send(msg)
+        }
     }
 }
 
-// Get the bot token
-botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-if botToken == "" {
-    log.Fatal("TELEGRAM_BOT_TOKEN not set")
-}
-
-
-	bot, err := tgbotapi.NewBotAPI(botToken)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	bot.Debug = true
-
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60
-
-	updates := bot.GetUpdatesChan(u)
-
-	for update := range updates {
-		if update.Message != nil {
-			shortMsg := parseMessage(update.Message.Text)
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, shortMsg)
-			msg.ParseMode = "HTML"
-			msg.DisableWebPagePreview = true
-			bot.Send(msg)
-		}
-	}
-}
