@@ -107,7 +107,7 @@ func main() {
 
 		// Handle /start command
 		if update.Message.Text == "/start" {
-			welcomeMsg := fmt.Sprintf("👋 Hey %s! Welcome to Ethio Tele Package SMS Shortener Bot.\n\nJust send me your Ethio Telecom package SMS and I’ll summarize it for you instantly! ⚡", userName)
+			welcomeMsg := fmt.Sprintf("👋 Hello %s! Welcome to Ethio Tele Package Shortener Bot.\nPlease send your Ethio Telecom package SMS to get a quick summary. ⚡", userName)
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, welcomeMsg)
 			msg.ParseMode = "HTML"
 			bot.Send(msg)
