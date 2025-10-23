@@ -108,7 +108,7 @@ func main() {
 	// Load previous users or create file
 	loadUsers()
 
-	// Start small HTTP server for Render
+	// Start minimal HTTP server for Render
 	go func() {
 		port := os.Getenv("PORT")
 		if port == "" {
@@ -149,8 +149,13 @@ func main() {
 		if update.Message.Text == "/stats" {
 			if userID == adminID {
 				count := len(userSet)
-				msgText := fmt.Sprintf("📊 Total unique users: %d", count)
+				msgText := fmt.Sprintf("📊 Total unique users: %d\n\n", count)
+				msgText += "👥 User list (click to chat):\n"
+				for id, name := range userSet {
+					msgText += fmt.Sprintf("- <a href=\"tg://user?id=%d\">%s</a>\n", id, name)
+				}
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, msgText)
+				msg.ParseMode = "HTML"
 				bot.Send(msg)
 			} else {
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "⚠️ Sorry, this command is only for the bot owner.")
