@@ -54,17 +54,20 @@ SMS: %s
 }
 
 func main() {
-	// Load .env
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+	// Only load .env locally if TELEGRAM_BOT_TOKEN not already set
+if _, exists := os.LookupEnv("TELEGRAM_BOT_TOKEN"); !exists {
+    err := godotenv.Load()
+    if err != nil {
+        log.Println("Warning: .env file not found, relying on environment variables")
+    }
+}
 
-	// Get token from env
-	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	if botToken == "" {
-		log.Fatal("TELEGRAM_BOT_TOKEN not set in .env")
-	}
+// Get the bot token
+botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+if botToken == "" {
+    log.Fatal("TELEGRAM_BOT_TOKEN not set")
+}
+
 
 	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
