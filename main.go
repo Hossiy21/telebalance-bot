@@ -16,8 +16,8 @@ import (
 var usersFile = "users.json"
 var userSet = make(map[int64]string)
 
-// 👇 Change this to your Telegram user ID (you can get it using @userinfobot)
-const adminID int64 = 413906777 // Replace this with your own Telegram user ID
+// Set your Telegram user ID as admin
+const adminID int64 = 413906777
 
 func saveUsers() {
 	data, _ := json.MarshalIndent(userSet, "", "  ")
@@ -25,10 +25,20 @@ func saveUsers() {
 }
 
 func loadUsers() {
-	data, err := ioutil.ReadFile(usersFile)
-	if err == nil {
-		_ = json.Unmarshal(data, &userSet)
+	// Auto-create file if it doesn't exist
+	if _, err := os.Stat(usersFile); os.IsNotExist(err) {
+		userSet = make(map[int64]string)
+		saveUsers()
+		return
 	}
+
+	data, err := ioutil.ReadFile(usersFile)
+	if err != nil {
+		log.Println("Error reading users file:", err)
+		return
+	}
+
+	_ = json.Unmarshal(data, &userSet)
 }
 
 func parseMessage(msg string) string {
@@ -95,10 +105,10 @@ func main() {
 	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)
 
-	// Load previous users
+	// Load previous users or create file
 	loadUsers()
 
-	// ✅ Start minimal HTTP server (Render requirement)
+	// Start small HTTP server for Render
 	go func() {
 		port := os.Getenv("PORT")
 		if port == "" {
@@ -123,7 +133,7 @@ func main() {
 		if _, exists := userSet[userID]; !exists {
 			userSet[userID] = userName
 			saveUsers()
-			log.Printf("New user added: %s (%d)", userName, userID)
+			log.Printf("New user added: %s (%d). Total users: %d", userName, userID, len(userSet))
 		}
 
 		// Handle /start
@@ -135,7 +145,7 @@ func main() {
 			continue
 		}
 
-		// Handle /stats — only admin can view
+		// Handle /stats — admin only
 		if update.Message.Text == "/stats" {
 			if userID == adminID {
 				count := len(userSet)
