@@ -17,7 +17,7 @@ var usersFile = "users.json"
 var userSet = make(map[int64]string)
 
 // 👇 Change this to your Telegram user ID (you can get it using @userinfobot)
-const adminID int64 = 123456789 // Replace this with your own Telegram user ID
+const adminID int64 = 413906777 // Replace this with your own Telegram user ID
 
 func saveUsers() {
 	data, _ := json.MarshalIndent(userSet, "", "  ")
