@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -24,8 +23,14 @@ const adminID int64 = 413906777
 // -------------------- USER MANAGEMENT --------------------
 
 func saveUsers() {
-	data, _ := json.MarshalIndent(userSet, "", "  ")
-	_ = ioutil.WriteFile(usersFile, data, 0644)
+	data, err := json.MarshalIndent(userSet, "", "  ")
+	if err != nil {
+		log.Println("Error marshaling users:", err)
+		return
+	}
+	if err := os.WriteFile(usersFile, data, 0644); err != nil {
+		log.Println("Error writing users file:", err)
+	}
 }
 
 func loadUsers() {
@@ -35,7 +40,7 @@ func loadUsers() {
 		return
 	}
 
-	data, err := ioutil.ReadFile(usersFile)
+	data, err := os.ReadFile(usersFile)
 	if err != nil {
 		log.Println("Error reading users file:", err)
 		return
@@ -233,7 +238,10 @@ func formatBalanceMessage(balance *BalanceInfo) string {
 func main() {
 	// Load .env for TELEGRAM_BOT_TOKEN and optional PORT
 	if _, exists := os.LookupEnv("TELEGRAM_BOT_TOKEN"); !exists {
-		_ = godotenv.Load()
+		// Attempt to load .env file if the token isn't set
+		if err := godotenv.Load(); err != nil {
+			log.Println("No .env file found, relying on environment variables")
+		}
 	}
 
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
