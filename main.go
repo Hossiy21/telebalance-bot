@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -20,28 +19,34 @@ var userSet = make(map[int64]string)
 const adminID int64 = 413906777
 
 func saveUsers() {
-	data, _ := json.MarshalIndent(userSet, "", "  ")
-	_ = ioutil.WriteFile(usersFile, data, 0644)
+	data, err := json.MarshalIndent(userSet, "", "  ")
+	if err != nil {
+		log.Println("Error marshaling users:", err)
+		return
+	}
+	if err := os.WriteFile(usersFile, data, 0644); err != nil {
+		log.Println("Error writing users file:", err)
+	}
 }
 
 func loadUsers() {
-	// Auto-create file if it doesn't exist
 	if _, err := os.Stat(usersFile); os.IsNotExist(err) {
 		userSet = make(map[int64]string)
 		saveUsers()
 		return
 	}
 
-	data, err := ioutil.ReadFile(usersFile)
+	data, err := os.ReadFile(usersFile)
 	if err != nil {
 		log.Println("Error reading users file:", err)
 		return
 	}
 
-	_ = json.Unmarshal(data, &userSet)
+	if err := json.Unmarshal(data, &userSet); err != nil {
+		log.Println("Error unmarshaling users:", err)
+	}
 }
 
-// 🚀 CORRECTED AND ENHANCED parseMessage function to handle complex, concatenated SMS
 func parseMessage(msg string) string {
 	// Initialize default values
 	origMinutes := "N/A"
@@ -53,38 +58,38 @@ func parseMessage(msg string) string {
 	remainingSMS := "0"
 
 	// --- 1. Extract Original VOICE & SMS Package ---
-	// Matches: 'Monthly student pack 234Min + 120SMS plus 234Min night bonus from telebirr'
-	// Captures: Type (Monthly/Daily/etc), Voice (234), SMS (120)
-	origVoiceSMSRe := regexp.MustCompile(`(Monthly|Daily|Weekly|Holiday)\s+.*?(\d+)Min\s*\+\s*(\d+)SMS.*?\s+from telebirr`)
+	// Matches: 'Monthly student pack 234Min + 120SMS' or 'Monthly voice 440 Min,1.1GB and 105 from telebirr SMS'
+	origVoiceSMSRe := regexp.MustCompile(`(Monthly|Daily|Weekly|Holiday)\s+(?:student pack|voice)?\s*(\d+)Min\s*[,+]\s*(?:([\d.]+)GB\s*(?:and\s*)?)?(\d+)?\s*(?:SMS|from telebirr SMS)?`)
 	origVoiceSMSMatch := origVoiceSMSRe.FindStringSubmatch(msg)
 
-	if len(origVoiceSMSMatch) >= 4 {
+	if len(origVoiceSMSMatch) >= 3 {
 		origMinutes = origVoiceSMSMatch[2]
-		origSMS = origVoiceSMSMatch[3]
+		if len(origVoiceSMSMatch) >= 4 && origVoiceSMSMatch[3] != "" {
+			origData = origVoiceSMSMatch[3]
+		}
+		if len(origVoiceSMSMatch) >= 5 && origVoiceSMSMatch[4] != "" {
+			origSMS = origVoiceSMSMatch[4]
+		}
 	}
 
 	// --- 2. Extract Original Data Package (Optional) ---
-	// Matches: 'Daily 1.5 GB Telegram + WhatsApp'
-	// Captures: Type (Daily/Weekly/etc), Data (1.5)
-	origDataRe := regexp.MustCompile(`(Daily|Weekly|Monthly|Holiday)\s+([\d.]+)\s+GB`)
+	// Matches: 'Daily 1.5GB' or '1.1GB' (no space before GB)
+	origDataRe := regexp.MustCompile(`(Daily|Weekly|Monthly|Holiday)?\s*([\d.]+)GB`)
 	origDataMatch := origDataRe.FindStringSubmatch(msg)
-
-	if len(origDataMatch) >= 3 {
+	if len(origDataMatch) >= 3 && origData == "N/A" { // Only set if not already set
 		origData = origDataMatch[2]
 	}
 
 	// Fail if no core package info is found
-	if origMinutes == "N/A" && origData == "N/A" {
-		return `🤔 <b>Sorry, I couldn’t understand that message.</b>
-<i>The message format is too complex or different from expected.</i>
-<br>Expected to find: <b>[Type] [Min] + [SMS]</b> OR <b>[Type] [GB]</b>
-👉 <a href="https://t.me/Hossiy_DevDiary"> Join our channel for more powerful resources</a> 👈`
+	if origMinutes == "N/A" && origData == "N/A" && origSMS == "N/A" {
+		return `🤔 Sorry, I couldn’t understand that message.
+Please send a valid package text like: "Dear Customer, your remaining Monthly voice is 219 Min..."
+👉 <a href="https://t.me/Hossiy_DevDiary"> Join our channel for more powerful resources </a> 👈`
 	}
 
 	// --- 3. Extract Remaining DATA (in MB) ---
 	// Matches: 'is 1536.000 MB with expiry date'
-	// Captures: Remaining Data (1536.000)
-	remDataRe := regexp.MustCompile(`is ([\d\.]+) MB with expiry date`)
+	remDataRe := regexp.MustCompile(`is ([\d.]+)\s*MB with expiry date`)
 	remDataMatch := remDataRe.FindStringSubmatch(msg)
 	if len(remDataMatch) >= 2 {
 		remainingDataMB = remDataMatch[1]
@@ -92,7 +97,6 @@ func parseMessage(msg string) string {
 
 	// --- 4. Extract Remaining MINUTES ---
 	// Matches: 'is 90 minute and 38 second'
-	// Captures: Remaining Minutes (90)
 	remMinRe := regexp.MustCompile(`is (\d+) minute(?:s)? and (\d+) second`)
 	remMinMatch := remMinRe.FindStringSubmatch(msg)
 	if len(remMinMatch) >= 3 {
@@ -101,7 +105,6 @@ func parseMessage(msg string) string {
 
 	// --- 5. Extract Remaining SMS ---
 	// Matches: 'is 111 SMS with expiry date'
-	// Captures: Remaining SMS (111)
 	remSMSRe := regexp.MustCompile(`is (\d+) SMS with expiry date`)
 	remSMSMatch := remSMSRe.FindStringSubmatch(msg)
 	if len(remSMSMatch) >= 2 {
@@ -120,7 +123,7 @@ Minutes: %s Min
 Data: %s MB
 SMS: %s
 
-👉 <a href="https://t.me/Hossiy_DevDiary"> Join our channel for more powerful resources</a> 👈`,
+👉 <a href="https://t.me/Hossiy_DevDiary"> Join our channel for more powerful resources </a> 👈`,
 		origMinutes, origData, origSMS, remainingMinutes, remainingDataMB, remainingSMS,
 	)
 
@@ -130,7 +133,9 @@ SMS: %s
 func main() {
 	if _, exists := os.LookupEnv("TELEGRAM_BOT_TOKEN"); !exists {
 		// Attempt to load .env file if the token isn't set
-		_ = godotenv.Load()
+		if err := godotenv.Load(); err != nil {
+			log.Println("No .env file found, relying on environment variables")
+		}
 	}
 
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
