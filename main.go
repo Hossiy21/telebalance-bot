@@ -41,29 +41,47 @@ func loadUsers() {
 	_ = json.Unmarshal(data, &userSet)
 }
 
+// 🚀 CORRECTED AND ENHANCED parseMessage function
 func parseMessage(msg string) string {
-	origRe := regexp.MustCompile(`Monthly voice (\d+) Min,([\d.]+)GB and (\d+) from telebirr SMS`)
+	// 1. Regex to extract Original Package (Minutes, GB, SMS)
+	// It now accepts Monthly, Daily, Weekly, or Holiday package types.
+	// (?:...) is a non-capturing group for the package type.
+	origRe := regexp.MustCompile(`(?:Monthly|Daily|Weekly|Holiday) voice (\d+) Min,([\d.]+)GB and (\d+) from telebirr SMS`)
 	origMatch := origRe.FindStringSubmatch(msg)
+
 	if len(origMatch) < 4 {
 		return `🤔 <b>Sorry, I couldn’t understand that message.</b>
-<i>Please send a valid package text like:</i> "Dear Customer, your remaining Monthly voice is 219 Min..."
+<i>Please send a valid package text that includes:</i>
+<ul>
+<li>A package type (Monthly, Daily, Weekly, or Holiday)</li>
+<li>Minutes, GB, and SMS count</li>
+</ul>
 👉 <a href="https://t.me/Hossiy_DevDiary"> Join our channel for more powerful resources</a> 👈`
 	}
 
+	// Captured groups for original package (indices 1, 2, 3)
 	origMinutes, origData, origSMS := origMatch[1], origMatch[2], origMatch[3]
 
+	// Initialize remaining values
+	remainingMinutes := "Unknown ❓"
+	remainingDataMB := "0"
+	remainingSMS := origSMS // Default to original SMS, as remaining SMS is often not in the remaining balance SMS
+
+	// 2. Regex to extract Remaining Minutes
 	remRe := regexp.MustCompile(`is (\d+) minute(?:s)? and (\d+) second`)
 	remMatch := remRe.FindStringSubmatch(msg)
-	if len(remMatch) < 3 {
-		return `❌ I couldn’t find remaining balance details.
-Please include something like "is 183 minute and 10 second" in your message.
-👉 <a href="https://t.me/Hossiy_DevDiary"> Join our channel for more powerful resources</a> 👈`
+	if len(remMatch) >= 3 {
+		remainingMinutes = remMatch[1]
 	}
 
-	remainingMinutes := remMatch[1]
-	remainingData := "0"
-	remainingSMS := origSMS
+	// 3. Regex to extract Remaining Data in MB
+	dataRemRe := regexp.MustCompile(`remaining data balance is ([\d.]+)MB`)
+	dataRemMatch := dataRemRe.FindStringSubmatch(msg)
+	if len(dataRemMatch) >= 2 {
+		remainingDataMB = dataRemMatch[1]
+	}
 
+	// 4. Construct the summary message
 	shortMsg := fmt.Sprintf(
 		`📝 <b>Original Package</b>
 Minutes: %s
@@ -76,11 +94,13 @@ Data: %s MB
 SMS: %s
 
 👉 <a href="https://t.me/Hossiy_DevDiary"> Join our channel for more powerful resources</a> 👈`,
-		origMinutes, origData, origSMS, remainingMinutes, remainingData, remainingSMS,
+		origMinutes, origData, origSMS, remainingMinutes, remainingDataMB, remainingSMS,
 	)
 
 	return shortMsg
 }
+// ----------------------------------------------------------------------
+// main function remains the same
 
 func main() {
 	if _, exists := os.LookupEnv("TELEGRAM_BOT_TOKEN"); !exists {
@@ -138,7 +158,7 @@ func main() {
 		// Handle /start
 		if update.Message.Text == "/start" {
 			welcomeMsg := fmt.Sprintf(
-				"👋 Hi %s! Welcome to Ethio Tele Package Shortener Bot.\nSend your Ethio Telecom package SMS, and I’ll summarize it neatly. ⚡",
+				"👋 Hi %s! Welcome to Ethio Tele Package Shortener Bot.\nSend your Ethio Telecom package SMS (Monthly, Daily, Weekly, Holiday), and I’ll summarize it neatly. ⚡",
 				userName,
 			)
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, welcomeMsg)
