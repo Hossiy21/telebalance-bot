@@ -41,55 +41,82 @@ func loadUsers() {
 	_ = json.Unmarshal(data, &userSet)
 }
 
-// 🚀 CORRECTED AND ENHANCED parseMessage function
+// 🚀 CORRECTED AND ENHANCED parseMessage function to handle complex, concatenated SMS
 func parseMessage(msg string) string {
-	// 1. Regex to extract Original Package (Minutes, GB, SMS)
-	// It now accepts Monthly, Daily, Weekly, or Holiday package types.
-	// (?:...) is a non-capturing group for the package type.
-	origRe := regexp.MustCompile(`(?:Monthly|Daily|Weekly|Holiday) voice (\d+) Min,([\d.]+)GB and (\d+) from telebirr SMS`)
-	origMatch := origRe.FindStringSubmatch(msg)
+	// Initialize default values
+	origMinutes := "N/A"
+	origSMS := "N/A"
+	origData := "N/A"
 
-	if len(origMatch) < 4 {
+	remainingMinutes := "0"
+	remainingDataMB := "0"
+	remainingSMS := "0"
+
+	// --- 1. Extract Original VOICE & SMS Package ---
+	// Matches: 'Monthly student pack 234Min + 120SMS plus 234Min night bonus from telebirr'
+	// Captures: Type (Monthly/Daily/etc), Voice (234), SMS (120)
+	origVoiceSMSRe := regexp.MustCompile(`(Monthly|Daily|Weekly|Holiday)\s+.*?(\d+)Min\s*\+\s*(\d+)SMS.*?\s+from telebirr`)
+	origVoiceSMSMatch := origVoiceSMSRe.FindStringSubmatch(msg)
+
+	if len(origVoiceSMSMatch) >= 4 {
+		origMinutes = origVoiceSMSMatch[2]
+		origSMS = origVoiceSMSMatch[3]
+	}
+
+	// --- 2. Extract Original Data Package (Optional) ---
+	// Matches: 'Daily 1.5 GB Telegram + WhatsApp'
+	// Captures: Type (Daily/Weekly/etc), Data (1.5)
+	origDataRe := regexp.MustCompile(`(Daily|Weekly|Monthly|Holiday)\s+([\d.]+)\s+GB`)
+	origDataMatch := origDataRe.FindStringSubmatch(msg)
+
+	if len(origDataMatch) >= 3 {
+		origData = origDataMatch[2]
+	}
+
+	// Fail if no core package info is found
+	if origMinutes == "N/A" && origData == "N/A" {
 		return `🤔 <b>Sorry, I couldn’t understand that message.</b>
-<i>Please send a valid package text that includes:</i>
-<ul>
-<li>A package type (Monthly, Daily, Weekly, or Holiday)</li>
-<li>Minutes, GB, and SMS count</li>
-</ul>
+<i>The message format is too complex or different from expected.</i>
+<br>Expected to find: <b>[Type] [Min] + [SMS]</b> OR <b>[Type] [GB]</b>
 👉 <a href="https://t.me/Hossiy_DevDiary"> Join our channel for more powerful resources</a> 👈`
 	}
 
-	// Captured groups for original package (indices 1, 2, 3)
-	origMinutes, origData, origSMS := origMatch[1], origMatch[2], origMatch[3]
-
-	// Initialize remaining values
-	remainingMinutes := "Unknown ❓"
-	remainingDataMB := "0"
-	remainingSMS := origSMS // Default to original SMS, as remaining SMS is often not in the remaining balance SMS
-
-	// 2. Regex to extract Remaining Minutes
-	remRe := regexp.MustCompile(`is (\d+) minute(?:s)? and (\d+) second`)
-	remMatch := remRe.FindStringSubmatch(msg)
-	if len(remMatch) >= 3 {
-		remainingMinutes = remMatch[1]
+	// --- 3. Extract Remaining DATA (in MB) ---
+	// Matches: 'is 1536.000 MB with expiry date'
+	// Captures: Remaining Data (1536.000)
+	remDataRe := regexp.MustCompile(`is ([\d\.]+) MB with expiry date`)
+	remDataMatch := remDataRe.FindStringSubmatch(msg)
+	if len(remDataMatch) >= 2 {
+		remainingDataMB = remDataMatch[1]
 	}
 
-	// 3. Regex to extract Remaining Data in MB
-	dataRemRe := regexp.MustCompile(`remaining data balance is ([\d.]+)MB`)
-	dataRemMatch := dataRemRe.FindStringSubmatch(msg)
-	if len(dataRemMatch) >= 2 {
-		remainingDataMB = dataRemMatch[1]
+	// --- 4. Extract Remaining MINUTES ---
+	// Matches: 'is 90 minute and 38 second'
+	// Captures: Remaining Minutes (90)
+	remMinRe := regexp.MustCompile(`is (\d+) minute(?:s)? and (\d+) second`)
+	remMinMatch := remMinRe.FindStringSubmatch(msg)
+	if len(remMinMatch) >= 3 {
+		remainingMinutes = remMinMatch[1]
 	}
 
-	// 4. Construct the summary message
+	// --- 5. Extract Remaining SMS ---
+	// Matches: 'is 111 SMS with expiry date'
+	// Captures: Remaining SMS (111)
+	remSMSRe := regexp.MustCompile(`is (\d+) SMS with expiry date`)
+	remSMSMatch := remSMSRe.FindStringSubmatch(msg)
+	if len(remSMSMatch) >= 2 {
+		remainingSMS = remSMSMatch[1]
+	}
+
+	// --- 6. Construct the Summary Message ---
 	shortMsg := fmt.Sprintf(
-		`📝 <b>Original Package</b>
-Minutes: %s
+		`📝 <b>Original Package(s)</b>
+Minutes: %s Min
 Data: %s GB
 SMS: %s
 
 💬 <b>Remaining Balance</b>
-Minutes: %s
+Minutes: %s Min
 Data: %s MB
 SMS: %s
 
@@ -99,17 +126,16 @@ SMS: %s
 
 	return shortMsg
 }
-// ----------------------------------------------------------------------
-// main function remains the same
 
 func main() {
 	if _, exists := os.LookupEnv("TELEGRAM_BOT_TOKEN"); !exists {
+		// Attempt to load .env file if the token isn't set
 		_ = godotenv.Load()
 	}
 
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if botToken == "" {
-		log.Fatal("TELEGRAM_BOT_TOKEN not set")
+		log.Fatal("TELEGRAM_BOT_TOKEN not set. Please set the environment variable or create a .env file.")
 	}
 
 	bot, err := tgbotapi.NewBotAPI(botToken)
@@ -127,7 +153,7 @@ func main() {
 	// Load previous users or create file
 	loadUsers()
 
-	// Start minimal HTTP server for Render
+	// Start minimal HTTP server for Render/deployment
 	go func() {
 		port := os.Getenv("PORT")
 		if port == "" {
@@ -137,7 +163,9 @@ func main() {
 			fmt.Fprintln(w, "Telegram bot is running ✅")
 		})
 		log.Printf("Listening on port %s\n", port)
-		log.Fatal(http.ListenAndServe(":"+port, nil))
+		if err := http.ListenAndServe(":"+port, nil); err != nil {
+			log.Fatalf("HTTP server failed: %v", err)
+		}
 	}()
 
 	for update := range updates {
