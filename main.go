@@ -58,8 +58,9 @@ func parseMessage(msg string) string {
 	remainingSMS := "0"
 
 	// --- 1. Extract Original VOICE & SMS Package ---
-	// Matches: 'Monthly student pack 234Min + 120SMS' or 'Monthly voice 440 Min,1.1GB and 105 from telebirr SMS'
-	origVoiceSMSRe := regexp.MustCompile(`(Monthly|Daily|Weekly|Holiday)\s+(?:student pack|voice)?\s*(\d+)Min\s*[,+]\s*(?:([\d.]+)GB\s*(?:and\s*)?)?(\d+)?\s*(?:SMS|from telebirr SMS)?`)
+	// Matches: 'Monthly student pack 234Min + 120SMS', 'Monthly voice 440 Min,1.1GB and 105 from telebirr SMS',
+	// or 'Monthly Holiday Voice 203 Min and 50 SMS Package'
+	origVoiceSMSRe := regexp.MustCompile(`(Monthly|Daily|Weekly|Holiday)\s+(?:student pack|voice|Holiday Voice)?\s*(\d+)Min\s*[,+and]\s*(?:([\d.]+)GB\s*(?:and\s*)?)?(\d+)?\s*(?:SMS|from telebirr SMS|SMS Package)?`)
 	origVoiceSMSMatch := origVoiceSMSRe.FindStringSubmatch(msg)
 
 	if len(origVoiceSMSMatch) >= 3 {
